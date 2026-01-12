@@ -2,12 +2,7 @@ import 'package:flutter/material.dart';
 import 'notification_screen.dart';
 import 'cart_screen.dart';
 import 'cart_data.dart';
-
-final List<Map<String, dynamic>> products = [
-  {'name': 'Wireless Headphones', 'price': 299.99},
-  {'name': 'Mechanical Keyboard', 'price': 149.99},
-  {'name': 'Gaming Mouse', 'price': 79.99},
-];
+import 'services/api_service.dart';
 
 class ProductListScreen extends StatelessWidget {
   const ProductListScreen({super.key});
@@ -40,27 +35,123 @@ class ProductListScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView.builder(
-        itemCount: products.length,
-        itemBuilder: (context, index) {
-          final product = products[index];
+      body: FutureBuilder<List<dynamic>>(
+        future: ApiService.getProducts(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          return Card(
-            margin: const EdgeInsets.all(8),
-            child: ListTile(
-              title: Text(product['name']),
-              subtitle: Text('Price: \$${product['price']}'),
-              trailing: ElevatedButton(
-                onPressed: () {
-                  cartItems.add(product);
+          if (snapshot.hasError) {
+            return Center(child: Text('Hata: ${snapshot.error}'));
+          }
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${product['name']} added to cart')),
-                  );
-                },
-                child: const Text('Add to Cart'),
-              ),
-            ),
+          final products = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final product = products[index];
+
+              final name = product['name'];
+              final price = product['price'];
+              final stock = product['stockQuantity'];
+              final imageUrl = product['imageUrl'];
+              final bool outOfStock = stock == 0;
+
+              return Card(
+                margin: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 🖼️ ÜRÜN RESMİ
+                    Image.network(
+                      imageUrl,
+                      height: 400,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text('Price: \$${price}'),
+                          Text('Stock: $stock'),
+                          const SizedBox(height: 8),
+
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton(
+                              onPressed: outOfStock
+                                  ? null
+                                  : () {
+                                      cartItems.add({
+                                        'name': name,
+                                        'price': price,
+                                      });
+
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text('$name added to cart'),
+                                        ),
+                                      );
+                                    },
+                              child: Text(
+                                outOfStock ? 'Out of Stock' : 'Add to Cart',
+                                style: TextStyle(
+                                  color: outOfStock ? const Color.fromARGB(255, 1, 49, 21) : const Color.fromARGB(255, 12, 89, 54),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                try {
+                                  await ApiService.trackProduct(
+                                    userId: 'user1',
+                                    productId: product['productId'],
+                                  );
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Product tracked'),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Tracking failed'),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: const Text('Track'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         },
       ),
